@@ -175,7 +175,7 @@ class FailureResponse {
   }
 }
 
-module.export = {
+module.exports = {
   BadRequest,
   Unauthorized,
   Forbidden,
