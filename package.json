@@ -1,0 +1,16 @@
+{
+  "name": "helper-utils",
+  "version": "1.0.0",
+  "description": "Common Utils Library",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mongoose": "^8.17.0",
+    "nodemailer": "^7.0.5",
+    "winston": "^3.17.0"
+  }
+}
