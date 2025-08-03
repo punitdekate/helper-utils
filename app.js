@@ -1,4 +1,4 @@
-const responses = require("./responses.js");
+const responses = require("./utils/Responses.js");
 
 module.exports = {
   SuccessResponse: responses.SuccessResponse,
