@@ -1,3 +1,4 @@
+"use strict";
 import nodemailer from "nodemailer";
 
 /**
@@ -13,42 +14,33 @@ import nodemailer from "nodemailer";
  * @returns the response from the email service
  * @throws {Error} If authentication credentials are missing or email sending fails
  */
-export async function sendEmail({
-  auth,
-  from,
-  email,
-  subject,
-  text,
-  html,
-  cc = [],
-  bcc = [],
-}) {
-  if (!auth || !auth.user || !auth.pass) {
-    throw new Error("Authentication credentials are required.");
-  }
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: auth,
-  });
+export async function sendEmail(auth, from, email, subject, text, html, cc = [], bcc = []) {
+    if (!auth || !auth.user || !auth.pass) {
+        throw new Error("Authentication credentials are required.");
+    }
+    const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: auth
+    });
 
-  const options = {
-    from: from || auth.user,
-    to: Array.isArray(email) ? email.join(",") : email,
-    cc: Array.isArray(cc) ? cc.join(",") : cc,
-    bcc: Array.isArray(bcc) ? bcc.join(",") : bcc,
-    subject: subject,
-    text: text,
-    html: html,
-  };
+    const options = {
+        from: from || auth.user,
+        to: Array.isArray(email) ? email.join(",") : email,
+        cc: Array.isArray(cc) ? cc.join(",") : cc,
+        bcc: Array.isArray(bcc) ? bcc.join(",") : bcc,
+        subject: subject,
+        text: text,
+        html: html
+    };
 
-  try {
-    const info = await transporter.sendMail(options);
-    return info.response;
-  } catch (err) {
-    throw err;
-  }
+    try {
+        const info = await transporter.sendMail(options);
+        return info.response;
+    } catch (err) {
+        throw err;
+    }
 }
 
 module.exports = {
-  sendEmail,
+    sendEmail
 };

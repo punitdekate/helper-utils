@@ -1,3 +1,4 @@
+"use strict";
 /**
  * BadRequest -   Represents a 400 Bad Request error.
  * @param {string} message - The error message.
@@ -155,89 +156,21 @@ class UnprocessableEntity {
  * @extends Error
  */
 class CustomMongooseError extends Error {
-    constructor(message, statusCode = 500, name, details = {}) {
+    constructor(message, statusCode = 500, details = {}) {
         super(message);
+        this.message = message || "An error occurred";
         this.statusCode = statusCode;
         this.name = name;
+        this.details = details || {};
     }
 
     getMessage() {
         return {
+            error: this.name || "CustomMongooseError",
             status: false,
             message: this.message,
-            details
+            details: this.details
         };
-    }
-}
-
-/**
- * SuccessResponse - Represents a successful response.
- * @param {Object} res - The response object from the Express.js framework.
- * @param {Object} data - The data to be sent in the response.
- * @param {number} [statusCode=200] - The HTTP status code for the response.
- * @param {Object} [options={}] - Additional options for the response.
- * @description This class is used to send a successful response back to the client.
- * @example
- * const response = new SuccessResponse(res, { message: "Success" });
- * response.send();
- */
-class SuccessResponse {
-    constructor(res, data, statusCode = 200, options = {}) {
-        this.res = res;
-        this.data = data;
-        this.statusCode = statusCode;
-        this.options = options;
-    }
-
-    send() {
-        this.res.status(this.statusCode).json({
-            status: true,
-            data: this.data,
-            ...this.options
-        });
-    }
-}
-
-/**
- * FailureResponse - Represents a failed response.
- * @param {Object} res - The response object from the Express.js framework.
- * @param {Error} error - The error object containing details about the failure.
- * @param {number} [statusCode=500] - The HTTP status code for the response.
- * @description This class is used to send an error response back to the client.
- * @example
- * const response = new FailureResponse(res, new Error("Something went wrong"), 500);
- * response.send();
- */
-class FailureResponse {
-    constructor(res, error, statusCode = 500) {
-        this.res = res;
-        this.error = error;
-        this.statusCode = statusCode;
-    }
-
-    send() {
-        const { message = "Internal Server Error", statusCode = 500 } = error;
-
-        if (this.statusCode === 401) {
-            return res.status(statusCode).json(new Unauthorized(message).getMessage());
-        }
-
-        if (statusCode === 403) {
-            return res.status(statusCode).json(new Forbidden(message).getMessage());
-        }
-
-        if (statusCode === 404) {
-            return res.status(statusCode).json(new ResourceNotFound(message).getMessage());
-        }
-
-        if (statusCode === 500) {
-            return res.status(statusCode).json(new InternalServerError(message).getMessage());
-        }
-
-        return res.status(statusCode).json({
-            status: false,
-            message: typeof message == String ? message : JSON.stringify(message)
-        });
     }
 }
 
@@ -249,6 +182,5 @@ module.exports = {
     InternalServerError,
     Conflict,
     UnprocessableEntity,
-    SuccessResponse,
-    FailureResponse
+    CustomMongooseError
 };

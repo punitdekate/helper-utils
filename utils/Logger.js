@@ -1,8 +1,9 @@
+"use strict";
 import winston from "winston";
 
 // Custom format for the logs
 const customFormat = winston.format.printf(({ timestamp, level, message }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+    return `${timestamp} [${level.toUpperCase()}]: ${message}`;
 });
 
 // Create a logger with different transports for error and info
