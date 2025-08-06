@@ -1,5 +1,5 @@
 "use strict";
-import winston from "winston";
+const winston = require("winston");
 
 // Custom format for the logs
 const customFormat = winston.format.printf(({ timestamp, level, message }) => {
