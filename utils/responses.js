@@ -5,18 +5,18 @@
  * @description This class is used to handle cases where the server cannot process the request due to client error (e.g., malformed request syntax, invalid request message framing, or deceptive request routing).
  */
 class BadRequest {
-  constructor(message, details = {}) {
-    this.message = message || "Bad Request";
-    this.statusCode = 400;
-  }
-  getMessage() {
-    return {
-      error: "BadRequest",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Bad Request";
+        this.statusCode = 400;
+    }
+    getMessage() {
+        return {
+            error: "BadRequest",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -26,18 +26,18 @@ class BadRequest {
  * @description This class is used to handle cases where authentication is required and has failed or has not yet been provided.
  */
 class Unauthorized {
-  constructor(message, details = {}) {
-    this.message = message || "Unauthorized";
-    this.statusCode = 401;
-  }
-  getMessage() {
-    return {
-      error: "Unauthorize",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Unauthorized";
+        this.statusCode = 401;
+    }
+    getMessage() {
+        return {
+            error: "Unauthorize",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -47,18 +47,18 @@ class Unauthorized {
  * @description This class is used to handle cases where the server understands the request but refuses to authorize it.
  */
 class Forbidden {
-  constructor(message, details = {}) {
-    this.message = message || "Forbidden";
-    this.statusCode = 403;
-  }
-  getMessage() {
-    return {
-      error: "Forbidden",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Forbidden";
+        this.statusCode = 403;
+    }
+    getMessage() {
+        return {
+            error: "Forbidden",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -68,18 +68,18 @@ class Forbidden {
  * @description This class is used to handle cases where a requested resource could not be found.
  */
 class ResourceNotFound {
-  constructor(message, details = {}) {
-    this.message = message || "Not Found";
-    this.statusCode = 404;
-  }
-  getMessage() {
-    return {
-      error: "ResourceNotFound",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Not Found";
+        this.statusCode = 404;
+    }
+    getMessage() {
+        return {
+            error: "ResourceNotFound",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -89,18 +89,18 @@ class ResourceNotFound {
  * @description This class is used to handle internal server errors in the application.
  */
 class InternalServerError {
-  constructor(message, details = {}) {
-    this.message = message || "Internal Server Error";
-    this.statusCode = 500;
-  }
-  getMessage() {
-    return {
-      error: "InternalServerError",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Internal Server Error";
+        this.statusCode = 500;
+    }
+    getMessage() {
+        return {
+            error: "InternalServerError",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -110,18 +110,18 @@ class InternalServerError {
  * @description This class is used to handle cases where a request could not be completed due to a conflict with the current state of the resource.
  */
 class Conflict {
-  constructor(message, details = {}) {
-    this.message = message || "Conflict";
-    this.statusCode = 409;
-  }
-  getMessage() {
-    return {
-      error: "Conflict",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Conflict";
+        this.statusCode = 409;
+    }
+    getMessage() {
+        return {
+            error: "Conflict",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -131,18 +131,18 @@ class Conflict {
  * @description This class is used to handle cases where the server understands the content type of the request entity, and the syntax of the request entity is correct, but it was unable to process the contained instructions.
  */
 class UnprocessableEntity {
-  constructor(message, details = {}) {
-    this.message = message || "Unprocessable Entity";
-    this.statusCode = 422;
-  }
-  getMessage() {
-    return {
-      error: "UnprocessableEntity",
-      status: false,
-      message: this.message,
-      details: this.details,
-    };
-  }
+    constructor(message, details = {}) {
+        this.message = message || "Unprocessable Entity";
+        this.statusCode = 422;
+    }
+    getMessage() {
+        return {
+            error: "UnprocessableEntity",
+            status: false,
+            message: this.message,
+            details: this.details
+        };
+    }
 }
 
 /**
@@ -155,19 +155,19 @@ class UnprocessableEntity {
  * @extends Error
  */
 class CustomMongooseError extends Error {
-  constructor(message, statusCode = 500, name, details = {}) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = name;
-  }
+    constructor(message, statusCode = 500, name, details = {}) {
+        super(message);
+        this.statusCode = statusCode;
+        this.name = name;
+    }
 
-  getMessage() {
-    return {
-      status: false,
-      message: this.message,
-      details,
-    };
-  }
+    getMessage() {
+        return {
+            status: false,
+            message: this.message,
+            details
+        };
+    }
 }
 
 /**
@@ -182,20 +182,20 @@ class CustomMongooseError extends Error {
  * response.send();
  */
 class SuccessResponse {
-  constructor(res, data, statusCode = 200, options = {}) {
-    this.res = res;
-    this.data = data;
-    this.statusCode = statusCode;
-    this.options = options;
-  }
+    constructor(res, data, statusCode = 200, options = {}) {
+        this.res = res;
+        this.data = data;
+        this.statusCode = statusCode;
+        this.options = options;
+    }
 
-  send() {
-    this.res.status(this.statusCode).json({
-      status: true,
-      data: this.data,
-      ...this.options,
-    });
-  }
+    send() {
+        this.res.status(this.statusCode).json({
+            status: true,
+            data: this.data,
+            ...this.options
+        });
+    }
 }
 
 /**
@@ -209,52 +209,46 @@ class SuccessResponse {
  * response.send();
  */
 class FailureResponse {
-  constructor(res, error, statusCode = 500) {
-    this.res = res;
-    this.error = error;
-    this.statusCode = statusCode;
-  }
-
-  send() {
-    const { message = "Internal Server Error", statusCode = 500 } = error;
-
-    if (this.statusCode === 401) {
-      return res
-        .status(statusCode)
-        .json(new Unauthorized(message).getMessage());
+    constructor(res, error, statusCode = 500) {
+        this.res = res;
+        this.error = error;
+        this.statusCode = statusCode;
     }
 
-    if (statusCode === 403) {
-      return res.status(statusCode).json(new Forbidden(message).getMessage());
-    }
+    send() {
+        const { message = "Internal Server Error", statusCode = 500 } = error;
 
-    if (statusCode === 404) {
-      return res
-        .status(statusCode)
-        .json(new ResourceNotFound(message).getMessage());
-    }
+        if (this.statusCode === 401) {
+            return res.status(statusCode).json(new Unauthorized(message).getMessage());
+        }
 
-    if (statusCode === 500) {
-      return res
-        .status(statusCode)
-        .json(new InternalServerError(message).getMessage());
-    }
+        if (statusCode === 403) {
+            return res.status(statusCode).json(new Forbidden(message).getMessage());
+        }
 
-    return res.status(statusCode).json({
-      status: false,
-      message: typeof message == String ? message : JSON.stringify(message),
-    });
-  }
+        if (statusCode === 404) {
+            return res.status(statusCode).json(new ResourceNotFound(message).getMessage());
+        }
+
+        if (statusCode === 500) {
+            return res.status(statusCode).json(new InternalServerError(message).getMessage());
+        }
+
+        return res.status(statusCode).json({
+            status: false,
+            message: typeof message == String ? message : JSON.stringify(message)
+        });
+    }
 }
 
 module.exports = {
-  BadRequest,
-  Unauthorized,
-  Forbidden,
-  ResourceNotFound,
-  InternalServerError,
-  Conflict,
-  UnprocessableEntity,
-  SuccessResponse,
-  FailureResponse,
+    BadRequest,
+    Unauthorized,
+    Forbidden,
+    ResourceNotFound,
+    InternalServerError,
+    Conflict,
+    UnprocessableEntity,
+    SuccessResponse,
+    FailureResponse
 };
