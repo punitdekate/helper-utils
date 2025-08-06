@@ -14,7 +14,7 @@ import nodemailer from "nodemailer";
  * @returns the response from the email service
  * @throws {Error} If authentication credentials are missing or email sending fails
  */
-export async function sendEmail(auth, from, email, subject, text, html, cc = [], bcc = []) {
+async function sendEmail(auth, from, email, subject, text, html, cc = [], bcc = []) {
     if (!auth || !auth.user || !auth.pass) {
         throw new Error("Authentication credentials are required.");
     }
