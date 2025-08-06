@@ -1,4 +1,6 @@
+"use strict";
 const { Logger: logger } = require("./Logger");
+const { failureResponse } = require("./ResponseHandler");
 
 /**
  * errorHandler - Middleware for handling errors in Express.js applications.

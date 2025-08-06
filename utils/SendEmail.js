@@ -1,5 +1,5 @@
 "use strict";
-import nodemailer from "nodemailer";
+const nodemailer = require("nodemailer");
 
 /**
  * @description Sends an email using Gmail's SMTP service.
@@ -41,6 +41,4 @@ async function sendEmail(auth, from, email, subject, text, html, cc = [], bcc = 
     }
 }
 
-module.exports = {
-    sendEmail
-};
+module.exports = { sendEmail };
