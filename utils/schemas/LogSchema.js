@@ -13,5 +13,6 @@ const LogSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
 });
 
-const LogModel = mongoose.model("Log", LogSchema);
-module.exports = LogModel;
+
+const LogModel = logTable => mongoose.model(logTable, LogSchema);
+module.exports = { LogModel };

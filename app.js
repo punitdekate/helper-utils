@@ -8,6 +8,7 @@ const responseHandler = require("./utils/ResponseHandler.js");
 const errorHandler = require("./utils/ErrorHandler.js");
 const requestContext = require("./utils/RequestContext.js");
 const mongoConnect = require("./utils/MongoConnection.js");
+const LogModel = require("./utils/schemas/LogSchema.js");
 
 module.exports = {
     ...responses,
@@ -16,5 +17,6 @@ module.exports = {
     ...responseHandler,
     ...errorHandler,
     ...requestContext,
-    ...mongoConnect
+    ...mongoConnect,
+    ...LogModel
 };
