@@ -15,10 +15,8 @@ const LogSchema = new mongoose.Schema({
 
 // Function to get/create a model for a given table name
 const AssignLogTableName = logTable => {
-    if (mongoose.models[logTable]) {
-        LogModel = mongoose.model(logTable);
-    }
     LogModel = mongoose.model(logTable, LogSchema);
+    return LogModel;
 };
 
 module.exports = { LogModel, AssignLogTableName };
