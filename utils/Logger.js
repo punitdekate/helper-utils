@@ -1,6 +1,6 @@
 "use strict";
 const winston = require("winston");
-const requestContext = require("./RequestContext.js");
+const { requestContext } = require("./RequestContext.js");
 const LogModel = require("./schemas/LogSchema.js");
 
 // Custom format for the logs
@@ -60,7 +60,7 @@ const log = (message, level = "info") => {
 
     const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
     Logger.log({ level, message: prefixedMessage });
-    
+
     // Non-blocking DB logging
     LogModel.create({
         requestId: ctx.requestId,
