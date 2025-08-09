@@ -1,6 +1,6 @@
-import winston from "winston";
-import mongoose from "mongoose";
-import requestContext from "./RequestContext.js"; // adjust path
+const winston = require("winston");
+const mongoose = require("mongoose");
+const requestContext = require("./RequestContext.js"); // adjust path
 
 /**
  * Logger class for structured logging with Winston and MongoDB.
@@ -14,13 +14,13 @@ import requestContext from "./RequestContext.js"; // adjust path
  * @property {winston.Logform.Format} customFormat - Custom format for log messages.
  * @example
  * const { Logger } = require('./utils/Logger');
- * const logger = new Logger(mongoConnection);  
+ * const logger = new Logger(mongoConnection);
  * logger.info('This is an info message');
- * logger.warn('This is a warning message');    
+ * logger.warn('This is a warning message');
  * logger.error('This is an error message');
  * @throws {Error} If the MongoDB connection fails or if logging to the database fails.
  */
-export default class Logger {
+class Logger {
     // Declare private fields
     #logDatabase;
     #logSchema;
