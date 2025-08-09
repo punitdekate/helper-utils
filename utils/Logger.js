@@ -31,11 +31,11 @@ class Logger {
     #logModel;
     #customFormat;
     #logger;
-    #serviceName;
+    #logTableName;
 
     constructor(logTableName = "Logs") {
         // Define private schema
-        this.#serviceName = serviceName || "default-service";
+        this.#logTableName = logTableName || "default-service";
         this.#logSchema = new mongoose.Schema({
             requestId: { type: String, required: true, index: true },
             service: { type: String, required: true, index: true },
@@ -65,7 +65,7 @@ class Logger {
         if (!this.#logDatabase) {
             this.#logDatabase = await mongoConnect({ connectionString: DB_URL, retry: 0 });
         }
-        this.#logModel = this.#logDatabase.model(this.#serviceName, this.#logSchema);
+        this.#logModel = this.#logDatabase.model(this.#logTableName, this.#logSchema);
     }
 
     // Private: setup Winston instance
