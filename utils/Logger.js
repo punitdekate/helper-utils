@@ -1,12 +1,15 @@
 const winston = require("winston");
 const mongoose = require("mongoose");
 const requestContext = require("./RequestContext.js"); // adjust path
+const { mongoConnect } = require("./MongoConnection.js");
 
 /**
  * Logger class for structured logging with Winston and MongoDB.
  * It supports different log levels and stores logs in a MongoDB collection.
  * It also formats logs with timestamps and colors for console output.
  * @class Logger
+ * @param {string}
+ * @property {string} serviceName - The name of the service for which logs are being generated.
  * @property {mongoose.Connection} logDatabase - The MongoDB connection to use for logging.
  * @property {mongoose.Schema} logSchema - The schema for the log entries.
  * @property {mongoose.Model} logModel - The Mongoose model for the log entries.
@@ -27,11 +30,11 @@ class Logger {
     #logModel;
     #customFormat;
     #logger;
+    #serviceName;
 
-    constructor(logDatabase) {
-        this.#logDatabase = logDatabase;
-
+    constructor(serviceName) {
         // Define private schema
+        this.#serviceName = serviceName || "default-service";
         this.#logSchema = new mongoose.Schema({
             requestId: { type: String, required: true, index: true },
             service: { type: String, required: true, index: true },
@@ -46,7 +49,7 @@ class Logger {
         });
 
         // Attach model to provided DB connection
-        this.#logModel = this.#logDatabase.model("Logs", this.#logSchema);
+        this.#initLogModel();
 
         // Setup log format
         this.#customFormat = winston.format.printf(({ timestamp, level, message }) => {
@@ -55,6 +58,13 @@ class Logger {
 
         // Initialize internal winston logger
         this.#initLogger();
+    }
+
+    async #initLogModel() {
+        if (!this.#logDatabase) {
+            this.#logDatabase = await mongoConnect({ connectionString: process.env.DB_URL });
+        }
+        this.#logModel = this.#logDatabase.model(this.#serviceName, this.#logSchema);
     }
 
     // Private: setup Winston instance
