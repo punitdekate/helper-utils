@@ -2,6 +2,7 @@ const winston = require("winston");
 const mongoose = require("mongoose");
 const requestContext = require("./RequestContext.js"); // adjust path
 const { mongoConnect } = require("./MongoConnection.js");
+const { DB_URL } = require("../constants.js");
 
 /**
  * Logger class for structured logging with Winston and MongoDB.
@@ -9,7 +10,7 @@ const { mongoConnect } = require("./MongoConnection.js");
  * It also formats logs with timestamps and colors for console output.
  * @class Logger
  * @param {string}
- * @property {string} serviceName - The name of the service for which logs are being generated.
+ * @property {string} logTableName - The name of the service for which logs are being generated.
  * @property {mongoose.Connection} logDatabase - The MongoDB connection to use for logging.
  * @property {mongoose.Schema} logSchema - The schema for the log entries.
  * @property {mongoose.Model} logModel - The Mongoose model for the log entries.
@@ -32,7 +33,7 @@ class Logger {
     #logger;
     #serviceName;
 
-    constructor(serviceName) {
+    constructor(logTableName = "Logs") {
         // Define private schema
         this.#serviceName = serviceName || "default-service";
         this.#logSchema = new mongoose.Schema({
@@ -62,7 +63,7 @@ class Logger {
 
     async #initLogModel() {
         if (!this.#logDatabase) {
-            this.#logDatabase = await mongoConnect({ connectionString: process.env.DB_URL });
+            this.#logDatabase = await mongoConnect({ connectionString: DB_URL, retry: 0 });
         }
         this.#logModel = this.#logDatabase.model(this.#serviceName, this.#logSchema);
     }
