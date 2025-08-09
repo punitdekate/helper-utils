@@ -1,31 +1,11 @@
+// logger.js
 const winston = require("winston");
 const mongoose = require("mongoose");
-const requestContext = require("./RequestContext.js"); // adjust path
+const requestContext = require("./RequestContext.js");
 const { mongoConnect } = require("./MongoConnection.js");
 const { DB_URL } = require("../constants.js");
 
-/**
- * Logger class for structured logging with Winston and MongoDB.
- * It supports different log levels and stores logs in a MongoDB collection.
- * It also formats logs with timestamps and colors for console output.
- * @class Logger
- * @param {string}
- * @property {string} logTableName - The name of the service for which logs are being generated.
- * @property {mongoose.Connection} logDatabase - The MongoDB connection to use for logging.
- * @property {mongoose.Schema} logSchema - The schema for the log entries.
- * @property {mongoose.Model} logModel - The Mongoose model for the log entries.
- * @property {winston.Logger} logger - The Winston logger instance.
- * @property {winston.Logform.Format} customFormat - Custom format for log messages.
- * @example
- * const { Logger } = require('./utils/Logger');
- * const logger = new Logger(mongoConnection);
- * logger.info('This is an info message');
- * logger.warn('This is a warning message');
- * logger.error('This is an error message');
- * @throws {Error} If the MongoDB connection fails or if logging to the database fails.
- */
 class Logger {
-    // Declare private fields
     #logDatabase;
     #logSchema;
     #logModel;
@@ -33,9 +13,11 @@ class Logger {
     #logger;
     #logTableName;
 
-    constructor(logTableName = "Logs") {
-        // Define private schema
-        this.#logTableName = logTableName || "default-service";
+    constructor(logDatabase, logTableName = "Logs") {
+        this.#logDatabase = logDatabase;
+        this.#logTableName = logTableName;
+
+        // Schema
         this.#logSchema = new mongoose.Schema({
             requestId: { type: String, required: true, index: true },
             service: { type: String, required: true, index: true },
@@ -49,26 +31,16 @@ class Logger {
             timestamp: { type: Date, default: Date.now }
         });
 
-        // Attach model to provided DB connection
-        this.#initLogModel();
+        // Model
+        this.#logModel = this.#logDatabase.model(this.#logTableName, this.#logSchema);
 
-        // Setup log format
-        this.#customFormat = winston.format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-        });
+        // Format
+        this.#customFormat = winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`);
 
-        // Initialize internal winston logger
+        // Init winston
         this.#initLogger();
     }
 
-    async #initLogModel() {
-        if (!this.#logDatabase) {
-            this.#logDatabase = await mongoConnect({ connectionString: DB_URL, retry: 0 });
-        }
-        this.#logModel = this.#logDatabase.model(this.#logTableName, this.#logSchema);
-    }
-
-    // Private: setup Winston instance
     #initLogger() {
         this.#logger = winston.createLogger({
             level: "info",
@@ -86,14 +58,11 @@ class Logger {
         });
     }
 
-    // Private: core logging logic
     #log(message, level = "info") {
         const ctx = requestContext.get() || {};
-
         const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
         this.#logger.log({ level, message: prefixedMessage });
 
-        // Save to DB asynchronously
         this.#logModel
             .create({
                 requestId: ctx.requestId,
@@ -112,18 +81,28 @@ class Logger {
             });
     }
 
-    // Public methods
     info(message) {
         this.#log(message, "info");
     }
-
     warn(message) {
         this.#log(message, "warn");
     }
-
     error(message) {
         this.#log(message, "error");
     }
 }
 
-module.exports = { Logger };
+// ---- Singleton Export ----
+let loggerInstancePromise = null;
+
+async function getLogger(tableName = "Logs") {
+    if (!loggerInstancePromise) {
+        loggerInstancePromise = (async () => {
+            const logDb = await mongoConnect({ connectionString: DB_URL, retry: 0 });
+            return new Logger(logDb, tableName);
+        })();
+    }
+    return loggerInstancePromise;
+}
+
+module.exports = { getLogger };
