@@ -1,113 +1,80 @@
-// logger.js
+"use strict";
 const winston = require("winston");
-const mongoose = require("mongoose");
-const requestContext = require("./RequestContext.js");
-const { mongoConnect } = require("./MongoConnection.js");
-const { DB_URL } = require("../constants.js");
+const { requestContext } = require("./requestContext.js");
+const LogModel = require("./schemas/LogSchema.js");
 
-class Logger {
-    #logDatabase;
-    #logSchema;
-    #logModel;
-    #customFormat;
-    #logger;
-    #logTableName;
+// Custom format for the logs
+const customFormat = winston.format.printf(({ timestamp, level, message }) => {
+    return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
 
-    constructor(logDatabase, logTableName = "Logs") {
-        this.#logDatabase = logDatabase;
-        this.#logTableName = logTableName;
-
-        // Schema
-        this.#logSchema = new mongoose.Schema({
-            requestId: { type: String, required: true, index: true },
-            service: { type: String, required: true, index: true },
-            userId: { type: String, default: null },
-            ip: String,
-            userAgent: String,
-            method: String,
-            url: String,
-            level: { type: String, enum: ["info", "warn", "error"], default: "info" },
-            message: String,
-            timestamp: { type: Date, default: Date.now }
-        });
-
-        // Model
-        this.#logModel = this.#logDatabase.model(this.#logTableName, this.#logSchema);
-
-        // Format
-        this.#customFormat = winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`);
-
-        // Init winston
-        this.#initLogger();
-    }
-
-    #initLogger() {
-        this.#logger = winston.createLogger({
+/**
+ * Logger - A custom logger using Winston for logging messages with different transports.
+ * @description This logger is configured to log error messages to a file and info messages to the console.
+ * It uses a custom format that includes timestamps and log levels.
+ * The logger can be used throughout the application to log messages at different levels (info, warn, error).
+ * @example
+ * const { Logger } = require('./utils/Logger');
+ * Logger.info('This is an info message');
+ * Logger.error('This is an error message');
+ */
+// Create a logger with different transports for error and info
+const Logger = winston.createLogger({
+    level: "info",
+    format: winston.format.combine(winston.format.timestamp(), customFormat),
+    transports: [
+        // Logs errors to a file
+        new winston.transports.File({
+            filename: "public/application.log",
+            level: "error"
+        }),
+        // Logs info and above to the console
+        new winston.transports.Console({
             level: "info",
-            format: winston.format.combine(winston.format.timestamp(), this.#customFormat),
-            transports: [
-                new winston.transports.File({
-                    filename: "public/application.log",
-                    level: "error"
-                }),
-                new winston.transports.Console({
-                    level: "info",
-                    format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), this.#customFormat)
-                })
-            ]
-        });
-    }
+            format: winston.format.combine(
+                winston.format.colorize(), // Adds color to console logs
+                winston.format.timestamp(),
+                customFormat
+            )
+        })
+    ]
+});
 
-    #log(message, level = "info") {
-        let ctx = {};
-        try {
-            ctx = requestContext.get() || {};
-        } catch {
-            ctx = {};
-        }
+/**
+ * log - A function to log messages with context information.
+ * @param {string} message - The message to log.
+ * @param {string} [level="info"] - The log level (info, warn, error).
+ * @description This function retrieves the current request context using AsyncLocalStorage,
+ * prefixes the message with the request ID, and logs it using Winston.
+ * It also logs the message to a MongoDB collection using Mongoose for persistent storage.
+ * * @example
+ * const { log } = require('helper-utils');
+ * log('This is an info message', 'info');
+ * log('This is a warning message', 'warn');
+ * log('This is an error message', 'error');
+ * * @returns {void}
+ * @throws {Error} If there is an error while logging to the database.
+ */
+const log = (message, level = "info") => {
+    const ctx = requestContext.get();
 
-        const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
-        this.#logger.log({ level, message: prefixedMessage });
+    const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
+    Logger.log({ level, message: prefixedMessage });
 
-        this.#logModel
-            .create({
-                requestId: ctx.requestId || "NO-REQ",
-                service: ctx.service || this.#logTableName,
-                userId: ctx.userId || null,
-                ip: ctx.ip || null,
-                userAgent: ctx.userAgent || null,
-                method: ctx.method || null,
-                url: ctx.url || null,
-                level,
-                message,
-                timestamp: new Date()
-            })
-            .catch(err => {
-                this.#logger.error(`Failed to log to DB: ${err.message}`);
-            });
-    }
-      
+    // Non-blocking DB logging
+    LogModel.create({
+        requestId: ctx.requestId,
+        userId: ctx.userId,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        method: ctx.method,
+        url: ctx.url,
+        level,
+        message,
+        timestamp: new Date()
+    }).catch(err => {
+        Logger.error(`Failed to log to DB: ${err.message}`);
+    });
+};
 
-    info(message) {
-        this.#log(message, "info");
-    }
-    warn(message) {
-        this.#log(message, "warn");
-    }
-    error(message) {
-        this.#log(message, "error");
-    }
-}
-
-// ---- Singleton Export ----
-let loggerInstance = null;
-
-async function getLogger(tableName = "Logs") {
-    if (!loggerInstance) {
-        const logDb = await mongoConnect({ connectionString: DB_URL, retry: 0 });
-        loggerInstance = new Logger(logDb, tableName);
-    }
-    return loggerInstance;
-}
-
-module.exports = { getLogger };
+module.exports = { Logger, log };
