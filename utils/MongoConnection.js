@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { Logger: logger } = require("./Logger");
 const MAX_RETRY = 3;
 
 async function mongoConnect({ connectionString, retry = 0 }) {
@@ -7,11 +6,11 @@ async function mongoConnect({ connectionString, retry = 0 }) {
         if (!connectionString) {
             throw new Error("Connection string is required");
         }
-        const userDB = await mongoose.createConnection(connectionString, {
+        const db = await mongoose.createConnection(connectionString, {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });
-        return userDB;
+        return db;
     } catch (error) {
         console.error(`Error in connectToDB : ${error.message}`);
         if (retry < MAX_RETRY) {
