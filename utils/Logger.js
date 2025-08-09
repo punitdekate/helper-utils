@@ -59,19 +59,25 @@ class Logger {
     }
 
     #log(message, level = "info") {
-        const ctx = requestContext.get() || {};
+        let ctx = {};
+        try {
+            ctx = requestContext.get() || {};
+        } catch {
+            ctx = {};
+        }
+
         const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
         this.#logger.log({ level, message: prefixedMessage });
 
         this.#logModel
             .create({
-                requestId: ctx.requestId,
-                service: ctx.service,
-                userId: ctx.userId,
-                ip: ctx.ip,
-                userAgent: ctx.userAgent,
-                method: ctx.method,
-                url: ctx.url,
+                requestId: ctx.requestId || "NO-REQ",
+                service: ctx.service || this.#logTableName,
+                userId: ctx.userId || null,
+                ip: ctx.ip || null,
+                userAgent: ctx.userAgent || null,
+                method: ctx.method || null,
+                url: ctx.url || null,
                 level,
                 message,
                 timestamp: new Date()
@@ -80,6 +86,7 @@ class Logger {
                 this.#logger.error(`Failed to log to DB: ${err.message}`);
             });
     }
+      
 
     info(message) {
         this.#log(message, "info");
