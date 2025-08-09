@@ -100,16 +100,14 @@ class Logger {
 }
 
 // ---- Singleton Export ----
-let loggerInstancePromise = null;
+let loggerInstance = null;
 
 async function getLogger(tableName = "Logs") {
-    if (!loggerInstancePromise) {
-        loggerInstancePromise = (async () => {
-            const logDb = await mongoConnect({ connectionString: DB_URL, retry: 0 });
-            return new Logger(logDb, tableName);
-        })();
+    if (!loggerInstance) {
+        const logDb = await mongoConnect({ connectionString: DB_URL, retry: 0 });
+        loggerInstance = new Logger(logDb, tableName);
     }
-    return loggerInstancePromise;
+    return loggerInstance;
 }
 
 module.exports = { getLogger };
