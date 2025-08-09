@@ -4,7 +4,6 @@ const MAX_RETRY = 3;
 
 async function mongoConnect({ connectionString, retry = 0 }) {
     try {
-        logger.info(`Connecting with database ${connectionString} on retry ${retry}`);
         if (!connectionString) {
             throw new Error("Connection string is required");
         }
@@ -14,7 +13,7 @@ async function mongoConnect({ connectionString, retry = 0 }) {
         });
         return userDB;
     } catch (error) {
-        logger.error(`Error in connectToDB : ${error.message}`);
+        console.error(`Error in connectToDB : ${error.message}`);
         if (retry < MAX_RETRY) {
             mongoConnect({ connectionString, retry: ++retry });
         } else {
