@@ -15,6 +15,7 @@ class UniversalLogger {
     #mongoConnection;
     #isInitializing = false;
     #isInitialized = false;
+    #initPromise = null; // Track initialization promise
 
     constructor() {
         // Start with console-only logger immediately
@@ -42,8 +43,15 @@ class UniversalLogger {
     }
 
     async #autoInitDatabase() {
-        // Avoid multiple initialization attempts
-        if (this.#isInitializing || this.#isInitialized) return;
+        // Return existing promise if already initializing/initialized
+        if (this.#initPromise) {
+            return this.#initPromise;
+        }
+
+        // Skip if already initialized or currently initializing
+        if (this.#isInitialized || this.#isInitializing) {
+            return;
+        }
 
         const mongoUri = DB_URL;
         const serviceName = "Logs";
@@ -53,9 +61,20 @@ class UniversalLogger {
             return;
         }
 
+        // Create and store the initialization promise
+        this.#initPromise = this.#performDatabaseInit(mongoUri, serviceName);
+        return this.#initPromise;
+    }
+
+    async #performDatabaseInit(mongoUri, serviceName) {
         this.#isInitializing = true;
 
         try {
+            // Check if connection already exists and is connected
+            if (this.#mongoConnection && this.#mongoConnection.readyState === 1) {
+                return;
+            }
+
             // Create MongoDB connection
             this.#mongoConnection = mongoose.createConnection(mongoUri, {
                 useNewUrlParser: true,
@@ -64,47 +83,14 @@ class UniversalLogger {
 
             await this.#mongoConnection.asPromise();
 
-            // Reconfigure logger with MongoDB transport
-            this.#logger.clear();
+            // Only reconfigure if not already configured
+            if (!this.#isInitialized) {
+                this.#reconfigureWithDatabase(serviceName);
+                this.#isInitialized = true;
 
-            const customFormat = winston.format.printf(({ timestamp, level, message }) => {
-                return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-            });
-
-            const transports = [
-                // Console transport
-                new winston.transports.Console({
-                    level: process.env.LOG_LEVEL || "info",
-                    format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
-                }),
-                // MongoDB transport
-                new winston.transports.MongoDB({
-                    db: this.#mongoConnection,
-                    collection: `${serviceName}_logs`,
-                    level: process.env.LOG_LEVEL || "info",
-                    options: { useUnifiedTopology: true },
-                    format: winston.format.combine(winston.format.timestamp(), winston.format.json())
-                })
-            ];
-
-            // Add file transport if LOG_FILE is specified
-            if (process.env.LOG_FILE) {
-                transports.push(
-                    new winston.transports.File({
-                        filename: process.env.LOG_FILE,
-                        level: "error"
-                    })
-                );
+                // Log success message only once
+                this.info(`Logger initialized for service: ${serviceName} with MongoDB`);
             }
-
-            this.#logger = winston.createLogger({
-                level: process.env.LOG_LEVEL || "info",
-                format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
-                transports
-            });
-
-            this.#isInitialized = true;
-            this.info(`Logger initialized for service: ${serviceName} with MongoDB`);
         } catch (error) {
             // Silently fall back to console-only logging
             this.#initConsoleLogger();
@@ -114,20 +100,63 @@ class UniversalLogger {
         }
     }
 
+    #reconfigureWithDatabase(serviceName) {
+        // Clear existing transports
+        this.#logger.clear();
+
+        const customFormat = winston.format.printf(({ timestamp, level, message }) => {
+            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        });
+
+        const transports = [
+            // Console transport
+            new winston.transports.Console({
+                level: process.env.LOG_LEVEL || "info",
+                format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
+            }),
+            // MongoDB transport
+            new winston.transports.MongoDB({
+                db: this.#mongoConnection,
+                collection: `${serviceName}_logs`,
+                level: process.env.LOG_LEVEL || "info",
+                options: { useUnifiedTopology: true },
+                format: winston.format.combine(winston.format.timestamp(), winston.format.json())
+            })
+        ];
+
+        // Add file transport if LOG_FILE is specified
+        if (process.env.LOG_FILE) {
+            transports.push(
+                new winston.transports.File({
+                    filename: process.env.LOG_FILE,
+                    level: "error"
+                })
+            );
+        }
+
+        this.#logger = winston.createLogger({
+            level: process.env.LOG_LEVEL || "info",
+            format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+            transports
+        });
+    }
+
     #getContext() {
+        let ctx = {};
         try {
             // Try to get request context from common patterns
             if (global.requestContext && typeof global.requestContext.get === "function") {
-                return global.requestContext.get() || {};
+                ctx = global.requestContext.get() || {};
             }
             if (global.cls && typeof global.cls.getNamespace === "function") {
                 const namespace = global.cls.getNamespace("request");
-                return namespace ? namespace.active : {};
+                ctx = namespace ? namespace.active : {};
             }
         } catch (err) {
-            // No context available
+            // No context available, continue with empty context
+            ctx = {};
         }
-        return {};
+        return ctx;
     }
 
     #log(level, message, meta = {}) {
@@ -135,13 +164,13 @@ class UniversalLogger {
 
         const logData = {
             message,
-            requestId: context.requestId || null,
+            requestId: context.requestId || "NO-REQ",
             userId: context.userId || null,
             ip: context.ip || null,
             userAgent: context.userAgent || null,
             method: context.method || null,
             url: context.url || null,
-            service: process.env.SERVICE_NAME || process.env.npm_package_name || "app",
+            service: context.service || process.env.SERVICE_NAME || process.env.npm_package_name || "app",
             ...meta
         };
 
@@ -172,8 +201,15 @@ class UniversalLogger {
     }
 }
 
-// Create singleton instance immediately
-const logger = new UniversalLogger();
+// Create singleton instance - ensure only one instance exists
+let loggerInstance = null;
 
-// Export the logger instance directly
-module.exports = { logger };
+function getLoggerInstance() {
+    if (!loggerInstance) {
+        loggerInstance = new UniversalLogger();
+    }
+    return loggerInstance;
+}
+
+// Export the singleton logger instance
+module.exports = { logger: getLoggerInstance() };
