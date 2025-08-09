@@ -1,80 +1,179 @@
 "use strict";
 const winston = require("winston");
-const { requestContext } = require("./requestContext.js");
-const LogModel = require("./schemas/LogSchema.js");
-
-// Custom format for the logs
-const customFormat = winston.format.printf(({ timestamp, level, message }) => {
-    return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
+const mongoose = require("mongoose");
+const { DB_URL } = require("../constants");
+require("winston-mongodb");
 
 /**
- * Logger - A custom logger using Winston for logging messages with different transports.
- * @description This logger is configured to log error messages to a file and info messages to the console.
- * It uses a custom format that includes timestamps and log levels.
- * The logger can be used throughout the application to log messages at different levels (info, warn, error).
- * @example
- * const { Logger } = require('./utils/Logger');
- * Logger.info('This is an info message');
- * Logger.error('This is an error message');
+ * Self-initializing Universal Logger
+ * Automatically configures itself based on environment variables
+ * Works immediately upon import with console logging
+ * Auto-connects to MongoDB if DB_LOG_URL is provided
  */
-// Create a logger with different transports for error and info
-const Logger = winston.createLogger({
-    level: "info",
-    format: winston.format.combine(winston.format.timestamp(), customFormat),
-    transports: [
-        // Logs errors to a file
-        new winston.transports.File({
-            filename: "public/application.log",
-            level: "error"
-        }),
-        // Logs info and above to the console
-        new winston.transports.Console({
-            level: "info",
-            format: winston.format.combine(
-                winston.format.colorize(), // Adds color to console logs
-                winston.format.timestamp(),
-                customFormat
-            )
-        })
-    ]
-});
+class UniversalLogger {
+    #logger;
+    #mongoConnection;
+    #isInitializing = false;
+    #isInitialized = false;
 
-/**
- * log - A function to log messages with context information.
- * @param {string} message - The message to log.
- * @param {string} [level="info"] - The log level (info, warn, error).
- * @description This function retrieves the current request context using AsyncLocalStorage,
- * prefixes the message with the request ID, and logs it using Winston.
- * It also logs the message to a MongoDB collection using Mongoose for persistent storage.
- * * @example
- * const { log } = require('helper-utils');
- * log('This is an info message', 'info');
- * log('This is a warning message', 'warn');
- * log('This is an error message', 'error');
- * * @returns {void}
- * @throws {Error} If there is an error while logging to the database.
- */
-const log = (message, level = "info") => {
-    const ctx = requestContext.get();
+    constructor() {
+        // Start with console-only logger immediately
+        this.#initConsoleLogger();
 
-    const prefixedMessage = `[${ctx.requestId || "NO-ID"}] ${message}`;
-    Logger.log({ level, message: prefixedMessage });
+        // Auto-initialize database logging if env vars are available
+        this.#autoInitDatabase();
+    }
 
-    // Non-blocking DB logging
-    LogModel.create({
-        requestId: ctx.requestId,
-        userId: ctx.userId,
-        ip: ctx.ip,
-        userAgent: ctx.userAgent,
-        method: ctx.method,
-        url: ctx.url,
-        level,
-        message,
-        timestamp: new Date()
-    }).catch(err => {
-        Logger.error(`Failed to log to DB: ${err.message}`);
-    });
-};
+    #initConsoleLogger() {
+        const customFormat = winston.format.printf(({ timestamp, level, message }) => {
+            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        });
 
-module.exports = { Logger, log };
+        this.#logger = winston.createLogger({
+            level: process.env.LOG_LEVEL || "info",
+            format: winston.format.combine(winston.format.timestamp(), customFormat),
+            transports: [
+                new winston.transports.Console({
+                    level: process.env.LOG_LEVEL || "info",
+                    format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
+                })
+            ]
+        });
+    }
+
+    async #autoInitDatabase() {
+        // Avoid multiple initialization attempts
+        if (this.#isInitializing || this.#isInitialized) return;
+
+        const mongoUri = DB_URL;
+        const serviceName = "Logs";
+
+        if (!mongoUri) {
+            // No database config, stay with console-only logging
+            return;
+        }
+
+        this.#isInitializing = true;
+
+        try {
+            // Create MongoDB connection
+            this.#mongoConnection = mongoose.createConnection(mongoUri, {
+                useNewUrlParser: true,
+                useUnifiedTopology: true
+            });
+
+            await this.#mongoConnection.asPromise();
+
+            // Reconfigure logger with MongoDB transport
+            this.#logger.clear();
+
+            const customFormat = winston.format.printf(({ timestamp, level, message }) => {
+                return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+            });
+
+            const transports = [
+                // Console transport
+                new winston.transports.Console({
+                    level: process.env.LOG_LEVEL || "info",
+                    format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
+                }),
+                // MongoDB transport
+                new winston.transports.MongoDB({
+                    db: this.#mongoConnection,
+                    collection: `${serviceName}_logs`,
+                    level: process.env.LOG_LEVEL || "info",
+                    options: { useUnifiedTopology: true },
+                    format: winston.format.combine(winston.format.timestamp(), winston.format.json())
+                })
+            ];
+
+            // Add file transport if LOG_FILE is specified
+            if (process.env.LOG_FILE) {
+                transports.push(
+                    new winston.transports.File({
+                        filename: process.env.LOG_FILE,
+                        level: "error"
+                    })
+                );
+            }
+
+            this.#logger = winston.createLogger({
+                level: process.env.LOG_LEVEL || "info",
+                format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+                transports
+            });
+
+            this.#isInitialized = true;
+            this.info(`Logger initialized for service: ${serviceName} with MongoDB`);
+        } catch (error) {
+            // Silently fall back to console-only logging
+            this.#initConsoleLogger();
+            console.warn(`Failed to initialize database logging: ${error.message}`);
+        } finally {
+            this.#isInitializing = false;
+        }
+    }
+
+    #getContext() {
+        try {
+            // Try to get request context from common patterns
+            if (global.requestContext && typeof global.requestContext.get === "function") {
+                return global.requestContext.get() || {};
+            }
+            if (global.cls && typeof global.cls.getNamespace === "function") {
+                const namespace = global.cls.getNamespace("request");
+                return namespace ? namespace.active : {};
+            }
+        } catch (err) {
+            // No context available
+        }
+        return {};
+    }
+
+    #log(level, message, meta = {}) {
+        const context = this.#getContext();
+
+        const logData = {
+            message,
+            requestId: context.requestId || null,
+            userId: context.userId || null,
+            ip: context.ip || null,
+            userAgent: context.userAgent || null,
+            method: context.method || null,
+            url: context.url || null,
+            service: process.env.SERVICE_NAME || process.env.npm_package_name || "app",
+            ...meta
+        };
+
+        this.#logger.log(level, message, logData);
+    }
+
+    // Public logging methods
+    info(message, meta = {}) {
+        this.#log("info", message, meta);
+    }
+
+    warn(message, meta = {}) {
+        this.#log("warn", message, meta);
+    }
+
+    error(message, meta = {}) {
+        this.#log("error", message, meta);
+    }
+
+    debug(message, meta = {}) {
+        this.#log("debug", message, meta);
+    }
+
+    async close() {
+        if (this.#mongoConnection) {
+            await this.#mongoConnection.close();
+        }
+    }
+}
+
+// Create singleton instance immediately
+const logger = new UniversalLogger();
+
+// Export the logger instance directly
+module.exports = { logger };

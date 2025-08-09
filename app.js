@@ -17,4 +17,5 @@ module.exports = {
     ...errorHandler,
     ...requestContext,
     ...mongoConnect,
+    ...logger
 };
