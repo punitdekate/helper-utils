@@ -16,9 +16,11 @@ class UniversalLogger {
     #isInitializing = false;
     #isInitialized = false;
     #initPromise = null; // Track initialization promise
+    #serviceName; // Fixed typo
 
-    constructor() {
+    constructor(serviceName = "Logs") {
         // Start with console-only logger immediately
+        this.#serviceName = serviceName;
         this.#initConsoleLogger();
 
         // Auto-initialize database logging if env vars are available
@@ -34,6 +36,10 @@ class UniversalLogger {
             level: process.env.LOG_LEVEL || "info",
             format: winston.format.combine(winston.format.timestamp(), customFormat),
             transports: [
+                new winston.transports.File({
+                    filename: "public/application.log",
+                    level: "error"
+                }),
                 new winston.transports.Console({
                     level: process.env.LOG_LEVEL || "info",
                     format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
@@ -54,7 +60,6 @@ class UniversalLogger {
         }
 
         const mongoUri = DB_URL;
-        const serviceName = "Logs";
 
         if (!mongoUri) {
             // No database config, stay with console-only logging
@@ -62,7 +67,7 @@ class UniversalLogger {
         }
 
         // Create and store the initialization promise
-        this.#initPromise = this.#performDatabaseInit(mongoUri, serviceName);
+        this.#initPromise = this.#performDatabaseInit(mongoUri, this.#serviceName);
         return this.#initPromise;
     }
 
@@ -109,12 +114,17 @@ class UniversalLogger {
         });
 
         const transports = [
+            // File transport for errors
+            new winston.transports.File({
+                filename: "public/application.log",
+                level: "error"
+            }),
             // Console transport
             new winston.transports.Console({
                 level: process.env.LOG_LEVEL || "info",
                 format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
             }),
-            // MongoDB transport
+            // MongoDB transport (use JSON format, not colorize)
             new winston.transports.MongoDB({
                 db: this.#mongoConnection,
                 collection: `${serviceName}_logs`,
@@ -124,8 +134,8 @@ class UniversalLogger {
             })
         ];
 
-        // Add file transport if LOG_FILE is specified
-        if (process.env.LOG_FILE) {
+        // Add additional file transport if LOG_FILE is specified
+        if (process.env.LOG_FILE && process.env.LOG_FILE !== "public/application.log") {
             transports.push(
                 new winston.transports.File({
                     filename: process.env.LOG_FILE,
@@ -170,7 +180,7 @@ class UniversalLogger {
             userAgent: context.userAgent || null,
             method: context.method || null,
             url: context.url || null,
-            service: context.service || process.env.SERVICE_NAME || process.env.npm_package_name || "app",
+            service: context.service || this.#serviceName || process.env.SERVICE_NAME || process.env.npm_package_name || "app",
             ...meta
         };
 
@@ -204,9 +214,9 @@ class UniversalLogger {
 // Create singleton instance - ensure only one instance exists
 let loggerInstance = null;
 
-function getLoggerInstance() {
+function getLoggerInstance(serviceName = "Logs") {
     if (!loggerInstance) {
-        loggerInstance = new UniversalLogger();
+        loggerInstance = new UniversalLogger(serviceName);
     }
     return loggerInstance;
 }
