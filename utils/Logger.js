@@ -85,11 +85,10 @@ class UniversalLogger {
             if (!this.#isInitialized) {
                 this.#reconfigureWithDatabase(serviceName);
                 this.#isInitialized = true;
-                
+
                 // Use console.log instead of this.info to avoid recursion
                 console.log(`Logger initialized for service: ${serviceName} with MongoDB`);
             }
-
         } catch (error) {
             this.#initConsoleLogger();
             console.warn(`Failed to initialize database logging: ${error.message}`);
@@ -99,7 +98,6 @@ class UniversalLogger {
     }
 
     #reconfigureWithDatabase(serviceName) {
-        // Completely clear and recreate logger
         if (this.#logger) {
             this.#logger.clear();
             this.#logger.close();
@@ -110,14 +108,7 @@ class UniversalLogger {
         });
 
         const transports = [
-            new winston.transports.File({
-                filename: "public/application.log",
-                level: "error"
-            }),
-            new winston.transports.Console({
-                level: process.env.LOG_LEVEL || "info",
-                format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
-            }),
+            new winston.transports.File({ filename: "public/application.log", level: "error" }),
             new winston.transports.MongoDB({
                 db: this.#mongoConnection,
                 collection: `${serviceName}_logs`,
@@ -126,15 +117,6 @@ class UniversalLogger {
                 format: winston.format.combine(winston.format.timestamp(), winston.format.json())
             })
         ];
-
-        if (process.env.LOG_FILE && process.env.LOG_FILE !== "public/application.log") {
-            transports.push(
-                new winston.transports.File({
-                    filename: process.env.LOG_FILE,
-                    level: "error"
-                })
-            );
-        }
 
         this.#logger = winston.createLogger({
             level: process.env.LOG_LEVEL || "info",
