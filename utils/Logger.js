@@ -1,51 +1,72 @@
 "use strict";
-const winston = require("winston");
 const mongoose = require("mongoose");
+const fs = require("fs").promises;
+const path = require("path");
 const { DB_URL } = require("../constants");
-require("winston-mongodb");
 
 /**
- * Self-initializing Universal Logger - TRUE SINGLETON
+ * Custom Universal Logger - No external dependencies
+ * Only uses mongoose for database logging
  */
 class UniversalLogger {
-    #logger;
     #mongoConnection;
+    #logModel;
     #isInitializing = false;
     #isInitialized = false;
     #initPromise = null;
     #serviceName;
 
+    // Console colors
+    #colors = {
+        info: "\x1b[36m", // cyan
+        warn: "\x1b[33m", // yellow
+        error: "\x1b[31m", // red
+        debug: "\x1b[90m", // gray
+        reset: "\x1b[0m" // reset
+    };
+
     constructor(serviceName = "Logs") {
         this.#serviceName = serviceName;
-        this.#initConsoleLogger();
-        
-        // Delay database init to avoid multiple simultaneous attempts
+
+        // Auto-initialize database
         setTimeout(() => this.#autoInitDatabase(), 100);
     }
 
-    #initConsoleLogger() {
-        const customFormat = winston.format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-        });
-
-        this.#logger = winston.createLogger({
-            level: process.env.LOG_LEVEL || "info",
-            format: winston.format.combine(winston.format.timestamp(), customFormat),
-            transports: [
-                new winston.transports.File({
-                    filename: "public/application.log",
-                    level: "error"
-                }),
-                new winston.transports.Console({
-                    level: process.env.LOG_LEVEL || "info",
-                    format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
-                })
-            ]
-        });
+    // Format timestamp
+    #getTimestamp() {
+        return new Date().toISOString();
     }
 
+    // Console logging with colors
+    #logToConsole(level, message) {
+        const timestamp = this.#getTimestamp();
+        const color = this.#colors[level] || this.#colors.reset;
+        const formattedMessage = `${timestamp} ${color}[${level.toUpperCase()}]${this.#colors.reset}: ${message}`;
+
+        console.log(formattedMessage);
+    }
+
+    // File logging for errors
+    async #logToFile(level, message) {
+        if (level !== "error") return;
+
+        try {
+            const timestamp = this.#getTimestamp();
+            const logEntry = `${timestamp} [${level.toUpperCase()}]: ${message}\n`;
+
+            // Ensure directory exists
+            const logDir = path.dirname("public/application.log");
+            await fs.mkdir(logDir, { recursive: true });
+
+            // Append to file
+            await fs.appendFile("public/application.log", logEntry);
+        } catch (error) {
+            console.error("Failed to write to log file:", error.message);
+        }
+    }
+
+    // Database initialization
     async #autoInitDatabase() {
-        // Multiple protection layers
         if (this.#initPromise) {
             return this.#initPromise;
         }
@@ -59,85 +80,91 @@ class UniversalLogger {
             return;
         }
 
-        // Set flag immediately to prevent other instances
         this.#isInitializing = true;
-        this.#initPromise = this.#performDatabaseInit(mongoUri, this.#serviceName);
-        
+        this.#initPromise = this.#performDatabaseInit(mongoUri);
+
         try {
             await this.#initPromise;
         } catch (error) {
-            this.#initPromise = null; // Reset on failure
+            this.#initPromise = null;
         }
     }
 
-    async #performDatabaseInit(mongoUri, serviceName) {
+    async #performDatabaseInit(mongoUri) {
         try {
-            // Check if already connected
             if (this.#mongoConnection && this.#mongoConnection.readyState === 1) {
                 return;
             }
 
-            // Create connection with timeout settings
+            // Connect to MongoDB
             this.#mongoConnection = mongoose.createConnection(mongoUri, {
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
-                connectTimeoutMS: 10000,  // Reduced timeout
-                serverSelectionTimeoutMS: 5000,
-                socketTimeoutMS: 45000
+                connectTimeoutMS: 10000,
+                serverSelectionTimeoutMS: 5000
             });
 
             await this.#mongoConnection.asPromise();
 
-            if (!this.#isInitialized) {
-                this.#reconfigureWithDatabase(serviceName);
-                this.#isInitialized = true;
-                
-                // Use console.log to avoid recursion
-                console.log(`Logger initialized for service: ${serviceName} with MongoDB`);
-            }
+            // Create log schema and model
+            const logSchema = new mongoose.Schema({
+                timestamp: { type: Date, default: Date.now },
+                level: { type: String, enum: ["info", "warn", "error", "debug"], required: true },
+                message: { type: String, required: true },
+                requestId: { type: String, default: "NO-REQ" },
+                userId: String,
+                ip: String,
+                userAgent: String,
+                method: String,
+                url: String,
+                service: { type: String, default: this.#serviceName },
+                meta: mongoose.Schema.Types.Mixed
+            });
 
+            this.#logModel = this.#mongoConnection.model(`${this.#serviceName}_logs`, logSchema);
+            this.#isInitialized = true;
+
+            console.log(`Logger initialized for service: ${this.#serviceName} with MongoDB`);
         } catch (error) {
             console.warn(`Database logging unavailable: ${error.message}`);
-            // Keep console-only logging
         } finally {
             this.#isInitializing = false;
         }
     }
 
-    #reconfigureWithDatabase(serviceName) {
-        if (this.#logger) {
-            this.#logger.clear();
+    // Database logging
+    async #logToDatabase(level, message, meta = {}) {
+        if (!this.#isInitialized || !this.#logModel) {
+            return;
         }
 
-        const customFormat = winston.format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-        });
+        try {
+            const context = this.#getContext();
 
-        const transports = [
-            new winston.transports.File({
-                filename: "public/application.log",
-                level: "error"
-            }),
-            new winston.transports.Console({
-                level: process.env.LOG_LEVEL || "info",
-                format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
-            }),
-            new winston.transports.MongoDB({
-                db: this.#mongoConnection,
-                collection: `${serviceName}_logs`,
-                level: process.env.LOG_LEVEL || "info",
-                options: { useUnifiedTopology: true },
-                format: winston.format.combine(winston.format.timestamp(), winston.format.json())
-            })
-        ];
+            const logEntry = {
+                timestamp: new Date(),
+                level,
+                message,
+                requestId: context.requestId || "NO-REQ",
+                userId: context.userId || null,
+                ip: context.ip || null,
+                userAgent: context.userAgent || null,
+                method: context.method || null,
+                url: context.url || null,
+                service: context.service || this.#serviceName,
+                meta: Object.keys(meta).length > 0 ? meta : undefined
+            };
 
-        this.#logger = winston.createLogger({
-            level: process.env.LOG_LEVEL || "info",
-            format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
-            transports
-        });
+            // Save to database (non-blocking)
+            this.#logModel.create(logEntry).catch(err => {
+                console.error(`Failed to save log to database: ${err.message}`);
+            });
+        } catch (error) {
+            console.error(`Database logging error: ${error.message}`);
+        }
     }
 
+    // Get request context
     #getContext() {
         let ctx = {};
         try {
@@ -150,24 +177,19 @@ class UniversalLogger {
         return ctx;
     }
 
+    // Core logging method
     #log(level, message, meta = {}) {
-        const context = this.#getContext();
+        // Log to console (always)
+        this.#logToConsole(level, message);
 
-        const logData = {
-            message,
-            requestId: context.requestId || "NO-REQ",
-            userId: context.userId || null,
-            ip: context.ip || null,
-            userAgent: context.userAgent || null,
-            method: context.method || null,
-            url: context.url || null,
-            service: context.service || this.#serviceName,
-            ...meta
-        };
+        // Log to file (errors only)
+        this.#logToFile(level, message);
 
-        this.#logger.log(level, message, logData);
+        // Log to database (if available)
+        this.#logToDatabase(level, message, meta);
     }
 
+    // Public methods
     info(message, meta = {}) {
         this.#log("info", message, meta);
     }
@@ -191,24 +213,23 @@ class UniversalLogger {
     }
 }
 
-// ===== GLOBAL SINGLETON REGISTRY =====
-// Use global to ensure singleton across ALL requires
-if (!global.__loggerInstances) {
-    global.__loggerInstances = new Map();
+// Global singleton registry
+if (!global.__customLoggerInstances) {
+    global.__customLoggerInstances = new Map();
 }
 
 function getLoggerInstance(serviceName = "Logs") {
-    if (!global.__loggerInstances.has(serviceName)) {
-        global.__loggerInstances.set(serviceName, new UniversalLogger(serviceName));
+    if (!global.__customLoggerInstances.has(serviceName)) {
+        global.__customLoggerInstances.set(serviceName, new UniversalLogger(serviceName));
     }
-    return global.__loggerInstances.get(serviceName);
+    return global.__customLoggerInstances.get(serviceName);
 }
 
 function createLogger(serviceName = "Logs") {
     return getLoggerInstance(serviceName);
 }
 
-// Export singleton
+// Export
 module.exports = {
     logger: getLoggerInstance("Logs"),
     createLogger
