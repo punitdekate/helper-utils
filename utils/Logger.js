@@ -15,15 +15,12 @@ class UniversalLogger {
     #mongoConnection;
     #isInitializing = false;
     #isInitialized = false;
-    #initPromise = null; // Track initialization promise
-    #serviceName; // Fixed typo
+    #initPromise = null;
+    #serviceName;
 
     constructor(serviceName = "Logs") {
-        // Start with console-only logger immediately
         this.#serviceName = serviceName;
         this.#initConsoleLogger();
-
-        // Auto-initialize database logging if env vars are available
         this.#autoInitDatabase();
     }
 
@@ -49,38 +46,35 @@ class UniversalLogger {
     }
 
     async #autoInitDatabase() {
-        // Return existing promise if already initializing/initialized
         if (this.#initPromise) {
             return this.#initPromise;
         }
 
-        // Skip if already initialized or currently initializing
         if (this.#isInitialized || this.#isInitializing) {
             return;
         }
 
         const mongoUri = DB_URL;
-
         if (!mongoUri) {
-            // No database config, stay with console-only logging
             return;
         }
 
-        // Create and store the initialization promise
         this.#initPromise = this.#performDatabaseInit(mongoUri, this.#serviceName);
         return this.#initPromise;
     }
 
     async #performDatabaseInit(mongoUri, serviceName) {
+        if (this.#isInitializing || this.#isInitialized) {
+            return;
+        }
+
         this.#isInitializing = true;
 
         try {
-            // Check if connection already exists and is connected
             if (this.#mongoConnection && this.#mongoConnection.readyState === 1) {
                 return;
             }
 
-            // Create MongoDB connection
             this.#mongoConnection = mongoose.createConnection(mongoUri, {
                 useNewUrlParser: true,
                 useUnifiedTopology: true
@@ -88,16 +82,15 @@ class UniversalLogger {
 
             await this.#mongoConnection.asPromise();
 
-            // Only reconfigure if not already configured
             if (!this.#isInitialized) {
                 this.#reconfigureWithDatabase(serviceName);
                 this.#isInitialized = true;
-
-                // Log success message only once
-                this.info(`Logger initialized for service: ${serviceName} with MongoDB`);
+                
+                // Use console.log instead of this.info to avoid recursion
+                console.log(`Logger initialized for service: ${serviceName} with MongoDB`);
             }
+
         } catch (error) {
-            // Silently fall back to console-only logging
             this.#initConsoleLogger();
             console.warn(`Failed to initialize database logging: ${error.message}`);
         } finally {
@@ -106,25 +99,25 @@ class UniversalLogger {
     }
 
     #reconfigureWithDatabase(serviceName) {
-        // Clear existing transports
-        this.#logger.clear();
+        // Completely clear and recreate logger
+        if (this.#logger) {
+            this.#logger.clear();
+            this.#logger.close();
+        }
 
         const customFormat = winston.format.printf(({ timestamp, level, message }) => {
             return `${timestamp} [${level.toUpperCase()}]: ${message}`;
         });
 
         const transports = [
-            // File transport for errors
             new winston.transports.File({
                 filename: "public/application.log",
                 level: "error"
             }),
-            // Console transport
             new winston.transports.Console({
                 level: process.env.LOG_LEVEL || "info",
                 format: winston.format.combine(winston.format.colorize(), winston.format.timestamp(), customFormat)
             }),
-            // MongoDB transport (use JSON format, not colorize)
             new winston.transports.MongoDB({
                 db: this.#mongoConnection,
                 collection: `${serviceName}_logs`,
@@ -134,7 +127,6 @@ class UniversalLogger {
             })
         ];
 
-        // Add additional file transport if LOG_FILE is specified
         if (process.env.LOG_FILE && process.env.LOG_FILE !== "public/application.log") {
             transports.push(
                 new winston.transports.File({
@@ -154,7 +146,6 @@ class UniversalLogger {
     #getContext() {
         let ctx = {};
         try {
-            // Try to get request context from common patterns
             if (global.requestContext && typeof global.requestContext.get === "function") {
                 ctx = global.requestContext.get() || {};
             }
@@ -163,7 +154,6 @@ class UniversalLogger {
                 ctx = namespace ? namespace.active : {};
             }
         } catch (err) {
-            // No context available, continue with empty context
             ctx = {};
         }
         return ctx;
@@ -180,14 +170,13 @@ class UniversalLogger {
             userAgent: context.userAgent || null,
             method: context.method || null,
             url: context.url || null,
-            service: context.service || this.#serviceName || process.env.SERVICE_NAME || process.env.npm_package_name || "app",
+            service: context.service || this.#serviceName || process.env.SERVICE_NAME || "app",
             ...meta
         };
 
         this.#logger.log(level, message, logData);
     }
 
-    // Public logging methods
     info(message, meta = {}) {
         this.#log("info", message, meta);
     }
@@ -208,18 +197,29 @@ class UniversalLogger {
         if (this.#mongoConnection) {
             await this.#mongoConnection.close();
         }
+        if (this.#logger) {
+            this.#logger.close();
+        }
     }
 }
 
-// Create singleton instance - ensure only one instance exists
-let loggerInstance = null;
+// ===== FIXED SINGLETON IMPLEMENTATION =====
+const loggerInstances = new Map();
 
 function getLoggerInstance(serviceName = "Logs") {
-    if (!loggerInstance) {
-        loggerInstance = new UniversalLogger(serviceName);
+    if (!loggerInstances.has(serviceName)) {
+        loggerInstances.set(serviceName, new UniversalLogger(serviceName));
     }
-    return loggerInstance;
+    return loggerInstances.get(serviceName);
 }
 
-// Export the singleton logger instance
-module.exports = { logger: getLoggerInstance() };
+function createLogger(serviceName = "Logs") {
+    // For createLogger, always return the same instance for the same service name
+    return getLoggerInstance(serviceName);
+}
+
+// Export with proper singleton
+module.exports = {
+    logger: getLoggerInstance("Logs"), // Default logger
+    createLogger // Factory function
+};
