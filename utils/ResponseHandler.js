@@ -43,6 +43,12 @@ function successResponse(res, data, statusCode = 200, options = {}) {
  * @description This function is used to send an error response back to the client, with appropriate status codes and messages.
  */
 function failureResponse(res, error) {
+     const { page, limit, totalCount, headers = {} } = options;
+
+    Object.entries(headers).forEach(([key, value]) => {
+        res.setHeader(key, value);
+    });
+    
     const { message = "Internal Server Error", statusCode = 500 } = error;
 
     if (statusCode === 401) {
