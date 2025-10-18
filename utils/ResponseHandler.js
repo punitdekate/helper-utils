@@ -13,7 +13,12 @@ const { Unauthorized, Forbidden, ResourceNotFound, InternalServerError } = requi
  * @description This function is used to send a successful response back to the client, optionally with pagination details.
  */
 function successResponse(res, data, statusCode = 200, options = {}) {
-    const { page, limit, totalCount } = options;
+    const { page, limit, totalCount, headers = {} } = options;
+
+    Object.entries(headers).forEach(([key, value]) => {
+        res.setHeader(key, value);
+    });
+
     let response = {
         data: data
     };
