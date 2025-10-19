@@ -43,7 +43,7 @@ function successResponse(res, data, statusCode = 200, options = {}) {
  * @description This function is used to send an error response back to the client, with appropriate status codes and messages.
  */
 function failureResponse(res, error, options) {
-    const { page, limit, totalCount, headers = {} } = options;
+    const { headers = {} } = options;
 
     Object.entries(headers).forEach(([key, value]) => {
         res.setHeader(key, value);
